@@ -35,7 +35,7 @@
     "rgb_matrix": {
         "driver": "ws2812",
         "led_count": 6,
-        "max_brightness": 40,
+        "max_brightness": 1,
         "animations": {
             "solid_color": true,
             "alphas_mods": true,
