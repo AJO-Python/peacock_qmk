@@ -3,47 +3,62 @@
 
 #include QMK_KEYBOARD_H
 
+enum layer_names {
+  _BASE,
+  _MAGIC,
+  _NAV,
+  _ETCH,
+  _ZOOM,
+};
+
 enum peacock_keycodes {
     LMB_TOGGLE = QK_USER_0
 };
 
 const uint16_t PROGMEM etch_a_sketch_combo[] = { KC_LGUI, KC_ENTER, COMBO_END };
 combo_t key_combos[] = {
-    COMBO(etch_a_sketch_combo, TG(2))
+    COMBO(etch_a_sketch_combo, TG(_ETCH))
 };
 
-#ifdef PEACOCK_ENCODER_BODGE
-const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {[0] = LAYOUT(KC_BTN1, KC_BTN2, LT(1, KC_BTN3), KC_LGUI, KC_ENTER),
-                                                              [1] = LAYOUT(QK_BOOT, RGB_MOD, KC_TRNS, RGB_RMOD, EE_CLR),
-                                                              [2] = LAYOUT(LMB_TOGGLE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
-                                                              [3] = LAYOUT(KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS)};
-#else
-const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {[0] = LAYOUT(KC_MUTE, KC_BTN1, KC_BTN2, LT(1, KC_BTN3), KC_LGUI, KC_ENTER, C(KC_C)),
-                                                              [1] = LAYOUT(KC_TRNS, QK_BOOT, RGB_MOD, KC_TRNS, RGB_RMOD, EE_CLR, KC_TRNS),
-                                                              [2] = LAYOUT(KC_TRNS, LMB_TOGGLE, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS),
-                                                              [3] = LAYOUT(KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS)};
-#endif
+const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
+  [_BASE] = LAYOUT(
+      MEH(KC_M),      KC_BTN1,    KC_BTN2,   LT(_MAGIC, KC_BTN3), LT(_NAV, KC_LGUI),   LT(_ZOOM, KC_ENTER),        C(KC_C)
+      ),
+  [_MAGIC] = LAYOUT(
+      KC_TRNS,      QK_BOOT,    RGB_MOD,   KC_TRNS,        RGB_RMOD,  EE_CLR,          KC_TRNS
+      ),
+  [_ETCH] = LAYOUT(
+      KC_TRNS,      LMB_TOGGLE, KC_TRNS,   KC_TRNS,        KC_TRNS,   KC_TRNS,         KC_TRNS
+      ),
+  [_NAV] = LAYOUT(
+      KC_TRNS,      KC_TRNS,    KC_TRNS,   KC_TRNS,        KC_TRNS,   KC_TRNS,         C(KC_0)
+      ),
+  [_ZOOM] = LAYOUT(
+      KC_TRNS,      KC_TRNS,    KC_TRNS,   KC_TRNS,        KC_TRNS,   KC_TRNS,         C(KC_0)
+      )
+};
 
 const uint8_t INDICATOR_LED = 5;
 
 #if defined(ENCODER_MAP_ENABLE)
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
-    [0] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU),  ENCODER_CCW_CW(KC_UP, KC_DOWN)  },
-    [1] = { ENCODER_CCW_CW(RGB_HUD, RGB_HUI),   ENCODER_CCW_CW(RGB_SAD, RGB_SAI)  },
-    [2] = { ENCODER_CCW_CW(KC_MS_LEFT, KC_MS_RIGHT),   ENCODER_CCW_CW(KC_MS_UP, KC_MS_DOWN)  },
-    [3] = { ENCODER_CCW_CW(KC_TRNS, KC_TRNS),  ENCODER_CCW_CW(KC_TRNS, KC_TRNS) },
+    [_BASE] = { ENCODER_CCW_CW(KC_VOLU, KC_VOLD),  ENCODER_CCW_CW(KC_UP, KC_DOWN)  },
+    [_MAGIC] = { ENCODER_CCW_CW(RGB_HUD, RGB_HUI),   ENCODER_CCW_CW(RGB_SAD, RGB_SAI)  },
+    [_ETCH] = { ENCODER_CCW_CW(KC_MS_RIGHT, KC_MS_LEFT),   ENCODER_CCW_CW(KC_MS_UP, KC_MS_DOWN)  },
+    [_ZOOM] = { ENCODER_CCW_CW(KC_TRNS, KC_TRNS),  ENCODER_CCW_CW(C(KC_PLUS), C(KC_MINS)) },
+    [_NAV] = { ENCODER_CCW_CW(KC_TRNS, KC_TRNS),  ENCODER_CCW_CW(LSA(KC_ESC), LALT(KC_ESC)) },
 };
 #endif
 
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     switch(get_highest_layer(layer_state|default_layer_state)) {
-        case 3:
-            rgb_matrix_set_color(INDICATOR_LED, RGB_BLUE);
-            break;
-        case 2:
+        case _MAGIC:
             rgb_matrix_set_color(INDICATOR_LED, RGB_RED);
             break;
-        case 1:
+        case _NAV:
+            rgb_matrix_set_color(INDICATOR_LED, RGB_BLUE);
+            break;
+        case _ZOOM:
             rgb_matrix_set_color(INDICATOR_LED, RGB_GREEN);
             break;
         default:
