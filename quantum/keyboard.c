@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "keycode_config.h"
 #include "matrix.h"
 #include "keymap_introspection.h"
-#include "magic.h"
 #include "host.h"
 #include "led.h"
 #include "keycode.h"
@@ -33,6 +32,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "sendchar.h"
 #include "eeconfig.h"
 #include "action_layer.h"
+#ifdef BOOTMAGIC_ENABLE
+#    include "bootmagic.h"
+#endif
 #ifdef AUDIO_ENABLE
 #    include "audio.h"
 #endif
@@ -83,6 +85,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 #ifdef POINTING_DEVICE_ENABLE
 #    include "pointing_device.h"
+#endif
+#ifdef DIGITIZER_ENABLE
+#    include "digitizer.h"
 #endif
 #ifdef MIDI_ENABLE
 #    include "process_midi.h"
@@ -135,6 +140,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef WPM_ENABLE
 #    include "wpm.h"
 #endif
+#ifdef OS_DETECTION_ENABLE
+#    include "os_detection.h"
+#endif
 
 static uint32_t last_input_modification_time = 0;
 uint32_t        last_input_activity_time(void) {
@@ -177,11 +185,23 @@ void last_pointing_device_activity_trigger(void) {
     last_pointing_device_modification_time = last_input_modification_time = sync_timer_read32();
 }
 
-void set_activity_timestamps(uint32_t matrix_timestamp, uint32_t encoder_timestamp, uint32_t pointing_device_timestamp) {
+static uint32_t last_digitizer_modification_time = 0;
+uint32_t        last_digitizer_activity_time(void) {
+    return last_digitizer_modification_time;
+}
+uint32_t last_digitizer_activity_elapsed(void) {
+    return sync_timer_elapsed32(last_digitizer_modification_time);
+}
+void last_digitizer_activity_trigger(void) {
+    last_digitizer_modification_time = last_input_modification_time = sync_timer_read32();
+}
+
+void set_activity_timestamps(uint32_t matrix_timestamp, uint32_t encoder_timestamp, uint32_t pointing_device_timestamp, uint32_t digitizer_timestamp) {
     last_matrix_modification_time          = matrix_timestamp;
     last_encoder_modification_time         = encoder_timestamp;
     last_pointing_device_modification_time = pointing_device_timestamp;
-    last_input_modification_time           = MAX(matrix_timestamp, MAX(encoder_timestamp, pointing_device_timestamp));
+    last_digitizer_modification_time       = digitizer_timestamp;
+    last_input_modification_time           = MAX(matrix_timestamp, MAX(encoder_timestamp, MAX(pointing_device_timestamp, digitizer_timestamp)));
 }
 
 // Only enable this if console is enabled to print to
@@ -370,28 +390,30 @@ void housekeeping_task(void) {
     housekeeping_task_user();
 }
 
-/** \brief Init tasks previously located in matrix_init_quantum
+/** \brief quantum_init
  *
- * TODO: rationalise against keyboard_init and current split role
+ * Init global state
  */
 void quantum_init(void) {
-    magic();
-    led_init_ports();
-#ifdef BACKLIGHT_ENABLE
-    backlight_init_ports();
+    /* check signature */
+    if (!eeconfig_is_enabled()) {
+        eeconfig_init();
+    }
+
+    /* init globals */
+    debug_config.raw  = eeconfig_read_debug();
+    keymap_config.raw = eeconfig_read_keymap();
+
+#ifdef BOOTMAGIC_ENABLE
+    bootmagic();
 #endif
-#ifdef AUDIO_ENABLE
-    audio_init();
-#endif
-#ifdef LED_MATRIX_ENABLE
-    led_matrix_init();
-#endif
-#ifdef RGB_MATRIX_ENABLE
-    rgb_matrix_init();
-#endif
-#if defined(UNICODE_COMMON_ENABLE)
-    unicode_input_mode_init();
-#endif
+
+    /* read here just incase bootmagic process changed its value */
+    layer_state_t default_layer = (layer_state_t)eeconfig_read_default_layer();
+    default_layer_set(default_layer);
+
+    /* Also initialize layer state to trigger callback functions for layer_state */
+    layer_state_set_kb((layer_state_t)layer_state);
 }
 
 /** \brief keyboard_init
@@ -412,6 +434,22 @@ void keyboard_init(void) {
 #endif
     matrix_init();
     quantum_init();
+    led_init_ports();
+#ifdef BACKLIGHT_ENABLE
+    backlight_init_ports();
+#endif
+#ifdef AUDIO_ENABLE
+    audio_init();
+#endif
+#ifdef LED_MATRIX_ENABLE
+    led_matrix_init();
+#endif
+#ifdef RGB_MATRIX_ENABLE
+    rgb_matrix_init();
+#endif
+#if defined(UNICODE_COMMON_ENABLE)
+    unicode_input_mode_init();
+#endif
 #if defined(CRC_ENABLE)
     crc_init();
 #endif
@@ -440,6 +478,9 @@ void keyboard_init(void) {
 #ifdef DIP_SWITCH_ENABLE
     dip_switch_init();
 #endif
+#ifdef JOYSTICK_ENABLE
+    joystick_init();
+#endif
 #ifdef SLEEP_LED_ENABLE
     sleep_led_init();
 #endif
@@ -448,6 +489,10 @@ void keyboard_init(void) {
 #endif
 #ifdef SPLIT_KEYBOARD
     split_post_init();
+#endif
+#ifdef DIGITIZER_ENABLE
+    // init before pointing device
+    digitizer_init();
 #endif
 #ifdef POINTING_DEVICE_ENABLE
     // init after split init
@@ -474,10 +519,10 @@ void keyboard_init(void) {
  */
 void switch_events(uint8_t row, uint8_t col, bool pressed) {
 #if defined(LED_MATRIX_ENABLE)
-    process_led_matrix(row, col, pressed);
+    led_matrix_handle_key_event(row, col, pressed);
 #endif
 #if defined(RGB_MATRIX_ENABLE)
-    process_rgb_matrix(row, col, pressed);
+    rgb_matrix_handle_key_event(row, col, pressed);
 #endif
 }
 
@@ -615,7 +660,7 @@ void quantum_task(void) {
 #endif
 
 #ifdef DIP_SWITCH_ENABLE
-    dip_switch_read(false);
+    dip_switch_task();
 #endif
 
 #ifdef AUTO_SHIFT_ENABLE
@@ -663,8 +708,16 @@ void keyboard_task(void) {
 #endif
 
 #ifdef ENCODER_ENABLE
-    if (encoder_read()) {
+    if (encoder_task()) {
         last_encoder_activity_trigger();
+        activity_has_occurred = true;
+    }
+#endif
+
+#ifdef DIGITIZER_ENABLE
+    // The digitizer may be a pointing device driver, so update its state before the pointing device
+    if (digitizer_task()) {
+        last_digitizer_activity_trigger();
         activity_has_occurred = true;
     }
 #endif
@@ -718,4 +771,8 @@ void keyboard_task(void) {
 #endif
 
     led_task();
+
+#ifdef OS_DETECTION_ENABLE
+    os_detection_task();
+#endif
 }

@@ -31,6 +31,7 @@ enum serial_transaction_id {
 #ifdef ENCODER_ENABLE
     GET_ENCODERS_CHECKSUM,
     GET_ENCODERS_DATA,
+    CMD_ENCODER_DRAIN,
 #endif // ENCODER_ENABLE
 
 #ifndef DISABLE_SYNC_TIMER
@@ -83,6 +84,12 @@ enum serial_transaction_id {
     GET_POINTING_DATA,
     PUT_POINTING_CPI,
 #endif // defined(POINTING_DEVICE_ENABLE) && defined(SPLIT_POINTING_ENABLE)
+
+#if defined(DIGITIZER_ENABLE) && defined(SPLIT_DIGITIZER_ENABLE)
+    GET_DIGITIZER_CHECKSUM,
+    GET_DIGITIZER_DATA,
+#endif // defined(DIGITIZER_ENABLE) && defined(SPLIT_DIGITIZER_ENABLE)
+
 
 #if defined(SPLIT_WATCHDOG_ENABLE)
     PUT_WATCHDOG,
